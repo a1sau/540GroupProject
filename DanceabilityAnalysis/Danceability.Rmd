@@ -1,0 +1,120 @@
+---
+title: "danceability"
+author: "Brian Krumholz"
+date: "10/24/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = normalizePath("C:/Users/Lugal/OneDrive/Documents/MSBA/Project/540GroupProject/DanceabilityAnalysis/CleanedData"))
+```
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(mi)
+library(stringr)
+library(moments)
+```
+
+```{r load excel}
+
+songdata <- read_xlsx("A1 Group 13 Cleaned Data.xlsx",sheet="Cleaned_Data")
+```
+
+```{r set data types}
+songdata$explicit <- as.logical(songdata$explicit)
+#songdata$explicit <- factor(songdata$explicit, levels = as.factor(c(0,1)))
+```
+
+
+```{r}
+summary(songdata)
+hist(songdata$danceability)
+hist(songdata$acousticness)
+hist(songdata$duration_ms)
+hist(songdata$energy)
+barplot(table(songdata$explicit),xlab = 'Explicit')
+hist(songdata$loudness)
+hist(songdata$mode)
+hist(songdata$speechiness)
+hist(songdata$tempo)
+hist(songdata$valence)
+```
+
+```{r plot against danceability}
+ggplot(data=songdata2,aes(x=acousticness,y=danceability))+geom_point()+geom_smooth()
+ggplot(data=songdata2,aes(x=duration_ms,y=danceability))+geom_point()+geom_smooth()
+ggplot(data=songdata2,aes(x=energy,y=danceability))+geom_point()+geom_smooth()
+ggplot(data=songdata2,aes(x=explicit,y=danceability))+geom_boxplot()+geom_smooth()
+ggplot(data=songdata2,aes(x=liveness,y=danceability))+geom_point()+geom_smooth()
+ggplot(data=songdata2,aes(x=loudness,y=danceability))+geom_point()+geom_smooth()
+ggplot(data=songdata2,aes(x=mode,y=danceability))+geom_point()+geom_smooth()
+ggplot(data=songdata2,aes(x=speechiness,y=danceability))+geom_point()+geom_smooth()
+ggplot(data=songdata2,aes(x=tempo,y=danceability))+geom_point()+geom_smooth()
+ggplot(data=songdata2,aes(x=valence,y=danceability))+geom_point()+geom_smooth()
+```
+
+
+
+```{r skew and kurtosis}
+songdata2<- select(songdata,acousticness,danceability,duration_ms,energy,explicit,liveness,loudness,mode,speechiness,tempo,valence)
+
+
+skew <- skewness(songdata2)
+kurt <- kurtosis(songdata2)
+
+show(skew)
+
+row_names<-colnames(songdata2)
+datashape<-data.frame(row.names=row_names)
+#rownames(datashape)<-column_names
+datashape$skew <- unname(skew)
+datashape$kurt <- unname(kurt)
+
+show(datashape)
+```
+
+
+It looks like duration_ms and speechiness may be good candidates for a transform priot to analyzing a linear fit.
+
+```{r transforms}
+#TODO Transform duration and speechiness
+```
+
+
+
+Documentation on danceability indicates that Spotify gives lower danceability scores if the song is too slow or too fast. To account for this, we will try to identify the ideal tempo that maximizes danceability and calculate the tempo's distance from that point.
+```{r Plot Tempp}
+ggplot(data=songdata2,aes(x=tempo,y=danceability))+geom_point()+geom_smooth()
+```
+
+The peak danceability tempo looks to be around 125 BPMs. Graphing the difference of tempo from 125 when compared to danceability gives a much more linear relationship.
+
+```{r Update distance from ideal tempo}
+songdata2$tempo.distance = abs(125-songdata2$tempo)
+ggplot(data=songdata2,aes(x=tempo.distance,y=danceability))+geom_point()+geom_smooth()
+
+```
+
+
+
+``` {r fit}
+songdata2$duration_ms.ln <- log(songdata2$duration_ms)
+songdata2$speechiness.ln <- log(songdata2$speechiness+1)
+songdata2$liveness.ln <- log(songdata2$liveness+1)
+song.fit<-lm(formula = danceability ~ acousticness+duration_ms.ln+energy+explicit+liveness.ln+loudness+mode+speechiness.ln+tempo.distance+valence, data= songdata2)
+summary(song.fit)
+plot(song.fit)
+```
+
+```{r residuals}
+song.residuals<-residuals(song.fit)
+#plot(song.residuals)
+ggplot(data=songdata2, aes(x=valence, y=song.residuals))+geom_point()+geom_smooth()
+ggplot(data=songdata2, aes(x=valence, y=song.residuals))+geom_point()+geom_point(aes(y=predict.model3),shape=1,color='red')+ggtitle(label="Actual Vs Predicted")
+ggplot(data=songdata2, aes(x=acousticness, y=song.residuals))+geom_point()+geom_point(aes(y=predict.model3),shape=1,color='red')+ggtitle(label="Actual Vs Predicted")
+ggplot(data=songdata2, aes(x=tempo.distance, y=song.residuals))+geom_point()+geom_point(aes(y=predict.model3),shape=1,color='blue')+ggtitle(label="Actual Vs Predicted")
+```
+
